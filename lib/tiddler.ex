@@ -1,4 +1,8 @@
 defmodule Tiddlywiki.Tiddler do
+  @moduledoc """
+    Struct representing a tiddler
+  """
+
   @derive Jason.Encoder
   defstruct [
     :title,

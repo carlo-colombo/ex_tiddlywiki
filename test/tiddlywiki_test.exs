@@ -5,6 +5,8 @@ defmodule TiddlywikiTest do
   alias Tiddlywiki.Tiddler
 
   require Logger
+
+  setup_all [:install_tiddlywiki]
   setup [:init_wiki, :start_wiki, :create_conf]
 
   describe "#get" do
@@ -101,6 +103,11 @@ defmodule TiddlywikiTest do
 
   # ===========================================================
 
+  defp install_tiddlywiki(_) do
+    {:ok, _} = :exec.run("npm install tiddlywiki", [:sync, :stdout, :stderr])
+    :ok
+  end
+
   defp create_tiddlers(%{wikiconf: wikiconf}) do
     [
       "test tiddler 1",
@@ -131,7 +138,7 @@ defmodule TiddlywikiTest do
   defp receive_messages(timeout, acc \\ []) do
     receive do
       {:stdout, _, "Serving on http://127.0.0.1:" <> port} ->
-        String.trim(port)
+        {:ok, String.trim(port)}
 
       msg ->
         receive_messages(timeout, [msg | acc])
@@ -142,8 +149,7 @@ defmodule TiddlywikiTest do
   end
 
   defp init_wiki(%{tmp_dir: wiki_dir}) do
-    {:ok, _} =
-      :exec.run("npx tiddlywiki '#{wiki_dir}' --init server", [:sync, :stdout, :stderr])
+    File.cp!("test/assets/tiddlywiki.info", "#{wiki_dir}/tiddlywiki.info")
 
     :ok
   end
@@ -162,6 +168,7 @@ defmodule TiddlywikiTest do
                 password=#{password} ",
         [
           :stdout,
+          :stderr,
           {:kill, "pkill -P ${CHILD_PID}"},
           {:kill_timeout, 2}
         ]
@@ -171,11 +178,13 @@ defmodule TiddlywikiTest do
       :exec.stop_and_wait(pid, 500)
     end)
 
-    port = receive_messages(2000)
+    with {:ok, port} <- receive_messages(2500) do
+      Logger.info("wiki '#{wiki_dir}' listening at port :#{port} ")
 
-    Logger.info("wiki '#{wiki_dir}' listening at port :#{port} ")
-
-    {:ok, port: port, username: username, password: password, wiki_dir: wiki_dir}
+      {:ok, port: port, username: username, password: password, wiki_dir: wiki_dir}
+    else
+      err -> Logger.error("there has been an error #{inspect(err)}")
+    end
   end
 
   defp create_conf(%{port: port, username: username, password: password}) do
